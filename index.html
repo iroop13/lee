@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEE://HUB — Mission Control</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --green: #00ff41;
+    --green-dim: #00ff4188;
+    --green-faint: #00ff4122;
+    --green-border: #00ff4144;
+    --bg: #000d00;
+    --bg-panel: #000a0099;
+    --bg-sidebar: #000800;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    cursor: crosshair;
+  }
+
+  /* Scanlines */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Canvas for matrix rain */
+  #matrix {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .layout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--green-border);
+    background: var(--bg-sidebar);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--green-dim);
+    flex-shrink: 0;
+  }
+
+  .status-badge {
+    padding: 2px 10px;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-size: 10px;
+    margin-left: 12px;
+    animation: pulse 2s infinite;
+  }
+  .status-badge.offline { border-color: #ff4444; color: #ff4444; animation: none; }
+
+  /* MAIN AREA */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 210px;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--green-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .sidebar-brand {
+    padding: 20px 16px;
+    border-bottom: 1px solid var(--green-border);
+  }
+
+  .brand-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    animation: glitch 5s infinite;
+  }
+
+  .brand-sub {
+    font-size: 9px;
+    color: var(--green-dim);
+    margin-top: 6px;
+    line-height: 1.6;
+    letter-spacing: 1px;
+  }
+
+  .nav-item {
+    padding: 11px 16px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    color: var(--green-dim);
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .nav-item:hover { color: var(--green); background: var(--green-faint); }
+  .nav-item.active {
+    color: var(--green);
+    background: #00ff4115;
+    border-left: 2px solid var(--green);
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 12px 16px;
+    font-size: 9px;
+    color: #00ff4133;
+    letter-spacing: 1px;
+  }
+
+  /* CONTENT AREA */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--green-border) transparent;
+  }
+
+  /* PANEL HEADER */
+  .panel-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 5px;
+    margin-bottom: 4px;
+  }
+
+  .panel-title span {
+    animation: blink 1s infinite;
+  }
+
+  .panel-sub {
+    font-size: 10px;
+    color: var(--green-dim);
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+  }
+
+  /* STAT CARDS */
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .stat-card {
+    flex: 1;
+    min-width: 90px;
+    border: 1px solid var(--green-border);
+    padding: 14px 16px;
+    background: var(--bg-panel);
+    animation: pulse 3s infinite;
+  }
+
+  .stat-label {
+    font-size: 9px;
+    color: var(--green-dim);
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .stat-unit {
+    font-size: 9px;
+    color: var(--green-dim);
+    margin-top: 3px;
+  }
+
+  /* MAIN PANEL BOX */
+  .panel-box {
+    border: 1px solid var(--green-border);
+    background: var(--bg-panel);
+    padding: 20px;
+    animation: fadeIn 0.4s ease;
+  }
+
+  .panel-box-title {
+    font-size: 10px;
+    color: var(--green-dim);
+    letter-spacing: 3px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--green-border);
+  }
+
+  /* LOG LINES */
+  .log-line {
+    font-size: 13px;
+    color: #aaffaacc;
+    padding: 5px 0;
+    border-bottom: 1px solid #00ff410a;
+    animation: fadeIn 0.3s ease both;
+  }
+
+  .log-line::before {
+    content: '> ';
+    color: var(--green-dim);
+  }
+
+  .log-empty {
+    color: var(--green-dim);
+    font-size: 12px;
+    padding: 12px 0;
+  }
+  .log-empty::before { content: '> '; }
+
+  /* CHAT */
+  .chat-messages {
+    max-height: 320px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--green-border) transparent;
+  }
+
+  .chat-msg {
+    padding: 5px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    animation: fadeIn 0.3s ease both;
+  }
+
+  .chat-msg.user { color: var(--green); }
+  .chat-msg.assistant { color: #aaffaa; }
+
+  .chat-prefix {
+    font-size: 11px;
+    margin-right: 8px;
+    opacity: 0.6;
+  }
+
+  .chat-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--green-border);
+    padding-top: 12px;
+  }
+
+  .chat-prompt {
+    color: var(--green-dim);
+    font-size: 14px;
+  }
+
+  .chat-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    caret-color: var(--green);
+  }
+
+  .chat-input::placeholder { color: #00ff4133; }
+
+  .chat-send {
+    background: var(--green-faint);
+    border: 1px solid var(--green-border);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 5px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .chat-send:hover {
+    background: #00ff4133;
+    border-color: var(--green);
+  }
+
+  .cursor-blink {
+    animation: blink 1s infinite;
+  }
+
+  /* KID MODE */
+  .kid-line {
+    font-size: 14px;
+    color: var(--green);
+    padding: 6px 0;
+    border-bottom: 1px solid #00ff410a;
+    animation: fadeIn 0.4s ease both;
+  }
+
+  /* ANIMATIONS */
+  @keyframes glitch {
+    0%, 90%, 100% { text-shadow: none; }
+    91% { text-shadow: 3px 0 #ff0000, -3px 0 #00ffff; }
+    92% { text-shadow: -3px 0 #ff0000, 3px 0 #00ffff; }
+    93% { text-shadow: 3px 0 #ff0000, -3px 0 #00ffff; }
+    94% { text-shadow: none; }
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 3px #00ff4133; }
+    50% { box-shadow: 0 0 12px #00ff4155, 0 0 24px #00ff4122; }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--green-border); }
+</style>
+</head>
+<body>
+
+<canvas id="matrix"></canvas>
+
+<div class="layout">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div>LEE://MISSION-HUB &nbsp;—&nbsp; CLAUDE AGENT SDK &nbsp;—&nbsp; RAILWAY</div>
+    <div>
+      <span id="clock">00:00:00</span>
+      <span class="status-badge offline" id="status-badge">● CONNECTING</span>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-title">LEE://HUB</div>
+        <div class="brand-sub">CLAUDE AGENT<br>MISSION CONTROL</div>
+      </div>
+
+      <div id="nav">
+        <div class="nav-item active" data-section="ops">01 / OPS DASH</div>
+        <div class="nav-item" data-section="workshop">02 / WORKSHOP</div>
+        <div class="nav-item" data-section="jobs">03 / JOBS</div>
+        <div class="nav-item" data-section="logs">04 / LIVE LOGS</div>
+        <div class="nav-item" data-section="reports">05 / REPORTS</div>
+        <div class="nav-item" data-section="agent">06 / AGENT HUB</div>
+        <div class="nav-item" data-section="system">07 / SYSTEM</div>
+        <div class="nav-item" data-section="news">08 / NEWSROOM</div>
+      </div>
+
+      <div class="sidebar-footer">v1.0.0 — RAILWAY DEPLOY</div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content" id="content">
+      <!-- Injected by JS -->
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'https://lee-production-7718.up.railway.app';
+let state = {
+  section: 'ops',
+  health: null,
+  jobs: [],
+  logs: [],
+  messages: [{ role: 'assistant', content: 'LEE agent online. Systems nominal. How can I assist?' }],
+  chatLoading: false,
+};
+
+// ── MATRIX RAIN ──────────────────────────────────────────────
+const canvas = document.getElementById('matrix');
+const ctx = canvas.getContext('2d');
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+const chars = 'アイウエオ01アカキクケ23ABCDEF<>{}';
+let drops = [];
+function initDrops() {
+  drops = Array(Math.floor(canvas.width / 14)).fill(1);
+}
+initDrops();
+setInterval(() => {
+  ctx.fillStyle = 'rgba(0,0,0,0.05)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#00ff4122';
+  ctx.font = '12px monospace';
+  drops.forEach((y, i) => {
+    ctx.fillText(chars[Math.floor(Math.random() * chars.length)], i * 14, y * 14);
+    if (y * 14 > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  });
+}, 60);
+
+// ── CLOCK ────────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+}, 1000);
+
+// ── FETCH DATA ───────────────────────────────────────────────
+async function fetchData() {
+  try {
+    const h = await fetch(API + '/health').then(r => r.json());
+    state.health = h;
+    const badge = document.getElementById('status-badge');
+    if (h.status === 'ok' || h.status === 'healthy') {
+      badge.textContent = '● ONLINE';
+      badge.className = 'status-badge';
+    }
+  } catch { }
+
+  try {
+    const j = await fetch(API + '/jobs').then(r => r.json());
+    state.jobs = Array.isArray(j) ? j : (j.jobs || []);
+  } catch { }
+
+  try {
+    const l = await fetch(API + '/logs').then(r => r.json());
+    state.logs = Array.isArray(l) ? l : (l.logs || []);
+  } catch { }
+
+  render();
+}
+fetchData();
+
+// ── NAV ──────────────────────────────────────────────────────
+document.getElementById('nav').addEventListener('click', e => {
+  const item = e.target.closest('.nav-item');
+  if (!item) return;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  item.classList.add('active');
+  state.section = item.dataset.section;
+  render();
+});
+
+// ── RENDER ───────────────────────────────────────────────────
+function render() {
+  const c = document.getElementById('content');
+  c.innerHTML = buildHeader() + buildStats() + buildSection();
+  if (state.section === 'agent') bindChat();
+}
+
+function buildHeader() {
+  const titles = {
+    ops: 'OPS DASHBOARD', workshop: 'WORKSHOP', jobs: 'JOBS QUEUE',
+    logs: 'LIVE LOG STREAM', reports: 'REPORTS', agent: 'AGENT HUB',
+    system: 'SYSTEM', news: 'NEWSROOM'
+  };
+  return `
+    <div style="margin-bottom:20px">
+      <div class="panel-title">MISSION HUB <span>_</span></div>
+      <div class="panel-sub">LEE AGENT / CLAUDE SDK / ${titles[state.section] || state.section.toUpperCase()}</div>
+    </div>
+  `;
+}
+
+function buildStats() {
+  const status = state.health ? (state.health.status || 'ok').toUpperCase() : '—';
+  return `
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">MODEL</div>
+        <div class="stat-value" style="font-size:16px;letter-spacing:2px">CLAUDE</div>
+        <div class="stat-unit">agent sdk</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">JOBS</div>
+        <div class="stat-value">${state.jobs.length}</div>
+        <div class="stat-unit">active</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">LOGS</div>
+        <div class="stat-value">${state.logs.length}</div>
+        <div class="stat-unit">entries</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">STATUS</div>
+        <div class="stat-value" style="font-size:16px">${status}</div>
+      </div>
+    </div>
+  `;
+}
+
+function buildSection() {
+  switch (state.section) {
+    case 'ops': return buildOps();
+    case 'jobs': return buildJobs();
+    case 'logs': return buildLogs();
+    case 'agent': return buildAgent();
+    default: return buildComingSoon();
+  }
+}
+
+function buildOps() {
+  const alive = state.health?.status === 'ok' || state.health?.status === 'healthy';
+  return `
+    <div class="panel-box">
+      <div class="panel-box-title">KID MODE: WHAT IS HAPPENING?</div>
+      <div class="kid-line">Is LEE awake? ${alive ? 'awake ✓' : 'checking...'}</div>
+      <div class="kid-line" style="animation-delay:0.1s">What is LEE doing? ${state.jobs.length} jobs tracked, ${state.logs.length} log entries found</div>
+      <div class="kid-line" style="animation-delay:0.2s">Is the server tired? ${alive ? 'feeling good ✓' : 'unknown'}</div>
+      <div class="kid-line" style="animation-delay:0.3s">Brain heat = CPU &nbsp;|&nbsp; Desk space = RAM &nbsp;|&nbsp; Storage cave = disk</div>
+      <div class="kid-line" style="animation-delay:0.4s">API endpoint → ${API}</div>
+    </div>
+  `;
+}
+
+function buildJobs() {
+  if (!state.jobs.length) return `<div class="panel-box"><div class="panel-box-title">JOBS QUEUE</div><div class="log-empty">no jobs found — queue is empty</div></div>`;
+  return `
+    <div class="panel-box">
+      <div class="panel-box-title">JOBS QUEUE — ${state.jobs.length} ENTRIES</div>
+      ${state.jobs.map((j, i) => `<div class="log-line" style="animation-delay:${i*0.04}s">${typeof j === 'string' ? j : JSON.stringify(j)}</div>`).join('')}
+    </div>
+  `;
+}
+
+function buildLogs() {
+  const recent = state.logs.slice(-30).reverse();
+  if (!recent.length) return `<div class="panel-box"><div class="panel-box-title">LIVE LOGS</div><div class="log-empty">no log entries available</div></div>`;
+  return `
+    <div class="panel-box">
+      <div class="panel-box-title">LIVE LOG STREAM — LAST ${recent.length} ENTRIES</div>
+      ${recent.map((l, i) => `<div class="log-line" style="animation-delay:${i*0.02}s">${typeof l === 'string' ? l : JSON.stringify(l)}</div>`).join('')}
+    </div>
+  `;
+}
+
+function buildAgent() {
+  const msgs = state.messages.map(m => `
+    <div class="chat-msg ${m.role}">
+      <span class="chat-prefix">${m.role === 'user' ? 'YOU://' : 'LEE://'}</span>${escHtml(m.content)}
+    </div>
+  `).join('');
+
+  const loading = state.chatLoading ? `<div class="chat-msg assistant"><span class="chat-prefix">LEE://</span><span class="cursor-blink">█</span></div>` : '';
+
+  return `
+    <div class="panel-box" style="display:flex;flex-direction:column">
+      <div class="panel-box-title">AGENT CHAT — CLAUDE BACKEND — ${API}</div>
+      <div class="chat-messages" id="chat-msgs">${msgs}${loading}</div>
+      <div class="chat-input-row">
+        <span class="chat-prompt">&gt;_</span>
+        <input class="chat-input" id="chat-input" placeholder="send command to LEE agent..." autocomplete="off" />
+        <button class="chat-send" id="chat-btn">SEND</button>
+      </div>
+    </div>
+  `;
+}
+
+function buildComingSoon() {
+  return `
+    <div class="panel-box">
+      <div class="panel-box-title">MODULE STATUS</div>
+      <div class="log-empty">module not yet initialized</div>
+      <div class="log-empty" style="animation-delay:0.1s">coming soon...</div>
+    </div>
+  `;
+}
+
+function bindChat() {
+  const input = document.getElementById('chat-input');
+  const btn = document.getElementById('chat-btn');
+  const msgs = document.getElementById('chat-msgs');
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+
+  const send = async () => {
+    const text = input?.value?.trim();
+    if (!text || state.chatLoading) return;
+    input.value = '';
+    state.messages.push({ role: 'user', content: text });
+    state.chatLoading = true;
+    render();
+    if (state.section === 'agent') bindChat();
+
+    try {
+      const res = await fetch(API + '/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      });
+      const data = await res.json();
+      state.messages.push({ role: 'assistant', content: data.response || data.message || data.reply || JSON.stringify(data) });
+    } catch {
+      state.messages.push({ role: 'assistant', content: 'ERROR: failed to reach LEE agent' });
+    }
+    state.chatLoading = false;
+    render();
+    if (state.section === 'agent') bindChat();
+  };
+
+  input?.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+  btn?.addEventListener('click', send);
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Initial render
+render();
+</script>
+</body>
+</html>
