@@ -1,0 +1,5 @@
+﻿fastapi
+uvicorn
+anthropic
+claude-agent-sdk
+python-dotenv
