@@ -13,11 +13,15 @@ import asyncio
 import json
 import os
 import time
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import uuid
 from pathlib import Path
 from typing import AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI(@app.get("/")
+async def serve_ui():
+    return FileResponse("index.html"))
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
